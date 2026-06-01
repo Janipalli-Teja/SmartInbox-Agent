@@ -1,17 +1,14 @@
 import { google } from "googleapis";
 import { oauth2Client } from "../config/google.js";
-
-type EmailMetadata = {
-  id: string;
-  subject?: string;
-  from?: string;
-  snippet?: string;
-};
+import { processEmail } from "./emailService.js";
+import type { EmailMetadata } from "../types.js";
 
 const GMAIL_PAGE_SIZE = 500;
 const DETAIL_BATCH_SIZE = 20;
 
-export const fetchEmails = async (): Promise<EmailMetadata[]> => {
+export const fetchEmails = async (): Promise<
+  EmailMetadata[]
+> => {
   const gmail = google.gmail({
     version: "v1",
     auth: oauth2Client,
@@ -21,62 +18,111 @@ export const fetchEmails = async (): Promise<EmailMetadata[]> => {
   let nextPageToken: string | undefined;
 
   try {
-    // Fetch all message IDs
     do {
-      const response = await gmail.users.messages.list({
-        userId: "me",
-        maxResults: GMAIL_PAGE_SIZE,
-        ...(nextPageToken && {
-          pageToken: nextPageToken,
-        }),
-      });
+      const response =
+        await gmail.users.messages.list({
+          userId: "me",
+          maxResults: GMAIL_PAGE_SIZE,
+          ...(nextPageToken && {
+            pageToken: nextPageToken,
+          }),
+        });
 
-      messages.push(...(response.data.messages ?? []));
+      messages.push(
+        ...(response.data.messages ?? [])
+      );
 
-      nextPageToken = response.data.nextPageToken ?? undefined;
+      nextPageToken =
+        response.data.nextPageToken ??
+        undefined;
     } while (nextPageToken);
 
-    console.log(`Found ${messages.length} messages`);
+    console.log(
+      `Found ${messages.length} messages`
+    );
 
-    const emailData: EmailMetadata[] = [];
+    const relevantEmails: EmailMetadata[] = [];
 
-    // Fetch details in batches
     for (
       let i = 0;
       i < messages.length;
       i += DETAIL_BATCH_SIZE
     ) {
-      const batch = messages.slice(i, i + DETAIL_BATCH_SIZE);
+      const batch = messages.slice(
+        i,
+        i + DETAIL_BATCH_SIZE
+      );
 
       const results = await Promise.all(
-        batch.map(async (msg) => {
+        batch.map(async (msg): Promise<EmailMetadata | null> => {
           if (!msg.id) return null;
 
           try {
-            const email = await gmail.users.messages.get({
-              userId: "me",
-              id: msg.id,
-              format: "metadata",
-              metadataHeaders: ["Subject", "From"],
-            });
+            const email =
+              await gmail.users.messages.get({
+                userId: "me",
+                id: msg.id,
+                format: "metadata",
+                metadataHeaders: [
+                  "Subject",
+                  "From",
+                ],
+              });
 
             const headers =
-              email.data.payload?.headers ?? [];
+              email.data.payload?.headers ??
+              [];
 
-            const subject = headers.find(
-              (h) => h.name === "Subject"
-            )?.value;
+            const subject =
+              headers.find(
+                (h) =>
+                  h.name === "Subject"
+              )?.value ?? "";
 
-            const from = headers.find(
-              (h) => h.name === "From"
-            )?.value;
+            const from =
+              headers.find(
+                (h) => h.name === "From"
+              )?.value ?? "";
+
+            const snippet =
+              email.data.snippet ?? "";
+
+            const processed =
+              processEmail(
+                subject,
+                from,
+                snippet
+              );
+
+            const { classification, confidence } =
+              processed.classificationResult;
+
+            if (classification === "other") {
+              return null;
+            }
+
+            if (confidence < 50) {
+              return null;
+            }
+            if (
+              classification !== "application_submitted" &&
+              classification !== "assessment" &&
+              classification !== "interview"
+            ) {
+              return null;
+            }
 
             return {
               id: msg.id,
-              subject: subject ?? undefined,
-              from: from ?? undefined,
-              snippet: email.data.snippet ?? undefined,
-            } as EmailMetadata;
+              subject,
+              from,
+              snippet,
+
+              senderDomain:
+                processed.senderDomain,
+
+              ClassificationResult: processed.classificationResult,
+            } satisfies EmailMetadata;
           } catch (error) {
             console.error(
               `Failed to fetch message ${msg.id}`,
@@ -88,9 +134,11 @@ export const fetchEmails = async (): Promise<EmailMetadata[]> => {
         })
       );
 
-      emailData.push(
+      relevantEmails.push(
         ...results.filter(
-          (email): email is EmailMetadata =>
+          (
+            email
+          ): email is EmailMetadata =>
             email !== null
         )
       );
@@ -103,9 +151,16 @@ export const fetchEmails = async (): Promise<EmailMetadata[]> => {
       );
     }
 
-    return emailData;
+    console.log(
+      `Found ${relevantEmails.length} relevant emails`
+    );
+
+    return relevantEmails;
   } catch (error) {
-    console.error("Failed to fetch emails:", error);
+    console.error(
+      "Failed to fetch emails:",
+      error
+    );
     throw error;
   }
 };

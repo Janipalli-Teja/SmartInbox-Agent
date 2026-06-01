@@ -8,9 +8,10 @@ export function processEmail(
 ) {
   return {
     senderDomain: extractDomain(from),
-    classification: classifyByKeywords(
-      subject,
-      snippet
-    ),
+    classificationResult:
+      classifyByKeywords(
+        subject,
+        snippet
+      ),
   };
 }

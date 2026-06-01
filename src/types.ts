@@ -22,4 +22,17 @@ export type EmailMetadata = {
   subject?: string;
   from?: string;
   snippet?: string;
+  senderDomain: string;
+  ClassificationResult:ClassificationResult
+};
+
+export type ClassificationResult = {
+  classification:
+    | "application_submitted"
+    | "assessment"
+    | "interview"
+    | "other";
+
+  confidence: number;
+  matchedKeywords:string[]
 };
