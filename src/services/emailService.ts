@@ -4,13 +4,16 @@ import { classifyByKeywords } from "../classifiers/keywordClassifier.js";
 export function processEmail(
   subject: string,
   from: string,
-  snippet: string
+  snippet: string,
+  sender:string
 ) {
   return {
     senderDomain: extractDomain(from),
-    classification: classifyByKeywords(
-      subject,
-      snippet
-    ),
+    classificationResult:
+      classifyByKeywords(
+        subject,
+        snippet,
+        sender
+      ),
   };
 }

@@ -22,4 +22,25 @@ export type EmailMetadata = {
   subject?: string;
   from?: string;
   snippet?: string;
+  body?: string;           // Full email body
+  receivedAt?: string;     // ISO date string from internalDate
+  senderDomain: string;
+  initialConfidence?: number;
+  ClassificationResult: ClassificationResult;
+};
+
+export type ClassificationResult = {
+  classification:
+    | "application_shortlisted"
+    | "application_rejected"
+    | "assessment"
+    | "interview"
+    | "other";
+
+  confidence: number;
+  llmVerified?: boolean;
+  initialConfidence?: number;
+  reason?: string;
+  matchedKeywords: string[];
+  excludeKeywords?: string[];
 };
