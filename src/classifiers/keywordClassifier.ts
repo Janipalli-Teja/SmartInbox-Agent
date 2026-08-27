@@ -1,5 +1,6 @@
 import {
-  STRONG_APPLICATION_PATTERNS,
+  APPLICATION_SHORTLISTED_PATTERNS,
+  APPLICATION_REJECTED_PATTERNS,
   MEDIUM_APPLICATION_PATTERNS,
   WEAK_APPLICATION_PATTERNS,
   STRICTLY_EXCLUDE_PHRASES,
@@ -11,47 +12,34 @@ import type { ClassificationResult } from "../types.js";
 
 export function classifyByKeywords(
   subject: string,
-  snippet: string
+  snippet: string,
+  sender: string
 ): ClassificationResult {
-  const text =
-    `${subject} ${snippet}`.toLowerCase();
-
+  const text = `${subject} ${snippet} ${sender}`.toLowerCase();
   const matchedKeywords: string[] = [];
 
   // --------------------------------------------------
-  // HARD EXCLUSIONS
+  // 1. HARD EXCLUSIONS — return immediately with 0 confidence
   // --------------------------------------------------
-
-  if (
-    STRICTLY_EXCLUDE_PHRASES.some((phrase) =>
-      text.includes(phrase.toLowerCase())
-    )
-  ) {
+  const excludeMatch = STRICTLY_EXCLUDE_PHRASES.find((phrase) =>
+    text.includes(phrase.toLowerCase())
+  );
+  if (excludeMatch) {
     return {
       classification: "other",
       confidence: 0,
-      matchedKeywords,
+      matchedKeywords: [],
+      excludeKeywords: [excludeMatch],
     };
   }
 
   // --------------------------------------------------
-  // EXACT APPLICATION MATCHES
+  // 2. REJECTED PATTERNS -> 100 confidence
   // --------------------------------------------------
-
-  const exactApplicationMatches = [
-    "application received",
-    "thank you for applying",
-    "your application has been successfully submitted",
-    "we have received your application",
-    "application confirmation",
-    "application acknowledged",
-  ];
-
-  for (const phrase of exactApplicationMatches) {
+  for (const phrase of APPLICATION_REJECTED_PATTERNS) {
     if (text.includes(phrase.toLowerCase())) {
       return {
-        classification:
-          "application_submitted",
+        classification: "application_rejected",
         confidence: 100,
         matchedKeywords: [phrase],
       };
@@ -59,92 +47,82 @@ export function classifyByKeywords(
   }
 
   // --------------------------------------------------
-  // INTERVIEW
+  // 3. SHORTLISTED PATTERNS -> 100 confidence
   // --------------------------------------------------
+  for (const phrase of APPLICATION_SHORTLISTED_PATTERNS) {
+    if (text.includes(phrase.toLowerCase())) {
+      return {
+        classification: "application_shortlisted",
+        confidence: 100,
+        matchedKeywords: [phrase],
+      };
+    }
+  }
 
-  const interviewMatches =
-    INTERVIEW_KEYWORDS.filter((keyword) =>
-      text.includes(keyword.toLowerCase())
-    );
 
+
+
+  // --------------------------------------------------
+  // 3. INTERVIEW — send to LLM (confidence < 100)
+  // --------------------------------------------------
+  const interviewMatches = INTERVIEW_KEYWORDS.filter((kw) =>
+    text.includes(kw.toLowerCase())
+  );
   if (interviewMatches.length > 0) {
     return {
       classification: "interview",
-      confidence: Math.min(
-        100,
-        80 + interviewMatches.length * 10
-      ),
+      confidence: Math.min(99, 80 + interviewMatches.length * 10),
       matchedKeywords: interviewMatches,
     };
   }
 
   // --------------------------------------------------
-  // ASSESSMENT
+  // 4. ASSESSMENT — send to LLM (confidence < 100)
   // --------------------------------------------------
-
-  const assessmentMatches =
-    ASSESSMENT_KEYWORDS.filter((keyword) =>
-      text.includes(keyword.toLowerCase())
-    );
-
+  const assessmentMatches = ASSESSMENT_KEYWORDS.filter((kw) =>
+    text.includes(kw.toLowerCase())
+  );
   if (assessmentMatches.length > 0) {
     return {
       classification: "assessment",
-      confidence: Math.min(
-        100,
-        80 + assessmentMatches.length * 10
-      ),
+      confidence: Math.min(99, 80 + assessmentMatches.length * 10),
       matchedKeywords: assessmentMatches,
     };
   }
 
   // --------------------------------------------------
-  // APPLICATION SCORING
+  // 5. MEDIUM + WEAK APPLICATION SCORING — send to LLM if score >= 40
   // --------------------------------------------------
-
   let score = 0;
 
-  for (const keyword of STRONG_APPLICATION_PATTERNS) {
-    if (
-      text.includes(keyword.toLowerCase())
-    ) {
-      score += 40;
-      matchedKeywords.push(keyword);
-    }
-  }
-
   for (const keyword of MEDIUM_APPLICATION_PATTERNS) {
-    if (
-      text.includes(keyword.toLowerCase())
-    ) {
+    if (text.includes(keyword.toLowerCase())) {
       score += 20;
       matchedKeywords.push(keyword);
     }
   }
 
   for (const keyword of WEAK_APPLICATION_PATTERNS) {
-    if (
-      text.includes(keyword.toLowerCase())
-    ) {
+    if (text.includes(keyword.toLowerCase())) {
       score += 10;
       matchedKeywords.push(keyword);
     }
   }
 
-  score = Math.min(score, 100);
+  score = Math.min(score, 99); // cap at 99 — LLM decides final verdict
 
-  if (score >= 40) {
+  if (score >= 10) {
     return {
-      classification:
-        "application_submitted",
+      classification: "other",
       confidence: score,
       matchedKeywords,
     };
   }
 
+  // Not enough signal → discard
   return {
     classification: "other",
-    confidence: score,
+    confidence: 0,
     matchedKeywords,
   };
 }

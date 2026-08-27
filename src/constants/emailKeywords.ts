@@ -1,11 +1,17 @@
-export const STRONG_APPLICATION_PATTERNS = [
-  "application received",
-  "thank you for applying",
-  "application submitted",
-  "your application has been successfully submitted",
-  "we have received your application",
-  "application confirmation",
-  "application acknowledged",
+
+
+
+export const APPLICATION_SHORTLISTED_PATTERNS = [
+  "shortlisted",
+  "moving forward",
+  "next steps in the process",
+];
+
+export const APPLICATION_REJECTED_PATTERNS = [
+  "unfortunately",
+  "not moving forward",
+  "proceed with other candidates",
+  "regret to inform",
 ];
 
 export const MEDIUM_APPLICATION_PATTERNS = [
@@ -15,6 +21,7 @@ export const MEDIUM_APPLICATION_PATTERNS = [
   "position",
   "hiring process",
   "recruitment",
+  "recruitment team",
   "next steps",
 ];
 
@@ -44,5 +51,6 @@ export const STRICTLY_EXCLUDE_PHRASES=[
   "new jobs that might interest",
   "Join LeetCode",
   "Student Offer",
-  "leetcode"
+  "leetcode",
+  "unstop.news"
 ]
